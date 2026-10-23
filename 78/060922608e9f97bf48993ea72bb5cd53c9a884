@@ -1,0 +1,28 @@
+.gitignore
+  h_162e444daf7c78 1-5
+LICENSE
+  h_162e444daf7c78 1-21
+README.md
+  h_162e444daf7c78 1-130
+client.js
+  h_162e444daf7c78 1-2675
+cordis.patch.yml
+  h_162e444daf7c78 1-12
+index.js
+  h_162e444daf7c78 1-309
+package.json
+  h_162e444daf7c78 1-61
+test/core.test.mjs
+  h_162e444daf7c78 1-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "78060922608e9f97bf48993ea72bb5cd53c9a884",
+  "prompts": {},
+  "humans": {
+    "h_162e444daf7c78": {
+      "author": "zengleiyixiao1 <zengleiyixiao1@jd.com>"
+    }
+  }
+}
