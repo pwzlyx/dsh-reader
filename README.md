@@ -1,6 +1,8 @@
 # dsh-reader
 
-[GitHub](https://github.com/pwzlyx/dsh-reader) · [npm](https://www.npmjs.com/package/dsh-reader) · MIT
+[GitHub](https://github.com/pwzlyx/dsh-reader) · [npm](https://www.npmjs.com/package/dsh-file-reader) · MIT
+
+> npm 包名是 `dsh-file-reader`：`dsh-reader` 这个名字已经被另一个 DSH 插件（底部状态栏看小说的那个）先占了，仓库名保持不变。
 
 在 DeepSeek Harness 的会话里读文件、看结构化文本、比两份文本的小工具。
 
@@ -16,7 +18,7 @@
 
 ```bash
 # 从 npm 装
-dsh plugin --profile web add dsh-reader
+dsh plugin --profile web add dsh-file-reader
 
 # 或者本地开发装（link 到当前目录，改完刷新页面就是新代码）
 dsh plugin --profile web add link:/path/to/dsh-reader

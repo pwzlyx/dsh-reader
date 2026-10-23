@@ -6,7 +6,7 @@
 # ============================================================================
 
 - insert:
-    - id: dsh-reader
-      name: dsh-reader
+    - id: dsh-file-reader
+      name: dsh-file-reader
       config:
         enabled: true
