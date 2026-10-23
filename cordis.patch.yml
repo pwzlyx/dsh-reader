@@ -7,6 +7,6 @@
 
 - insert:
     - id: dsh-reader
-      name: dsh-reader
+      name: "@zengleiyixiao/dsh-reader"
       config:
         enabled: true

@@ -24,12 +24,15 @@ dsh plugin --profile web add @zengleiyixiao/dsh-reader
 dsh plugin --profile web add link:/path/to/dsh-reader
 ```
 
-装完确认 profile 的 `package.json` 里 `dependencies` 有 `dsh-reader`、`dsh.profile.bundles` 里有 `dsh-reader`（没有就手动加一行），
+装完确认 profile 的 `package.json` 里 `dependencies` 有 `@zengleiyixiao/dsh-reader`、`dsh.profile.bundles` 里有 `@zengleiyixiao/dsh-reader`（没有就手动加一行），
 然后**重启宿主进程**（`dsh web` 或桌面 App — 宿主是在启动时扫描 bundle 的）。打开一个有内容的会话，上方多出「阅读器」页签就说明成了。
 
 桌面 App 用的是 `desktop` profile，路径是 `~/.dsh/profiles/desktop`；它的 package.json 由 App 独占管理，
 命令行 `dsh plugin --profile desktop` 会被拒（"managed exclusively by the Electron application"），
-可以直接编辑那份 package.json 加 `"dsh-reader": "link:/path/to/dsh-reader"` 并在 `dsh.profile.bundles` 末尾加一行，重启 App。
+可以直接编辑那份 package.json 加 `"@zengleiyixiao/dsh-reader": "link:/path/to/dsh-reader"` 并在 `dsh.profile.bundles` 末尾加一行，重启 App。
+
+> 排错：插件在浏览器端的模块 id 必须等于包名（`client.js` 里的 `__ModuleLoader__.load({ id: ... })` 要和 `package.json` 的 `name` 一致，
+> 挂载声明的 `name` 也要一致）。改包名却没改这两处时，字面上什么都正常，页签就是不出现。
 
 ## 用
 

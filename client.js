@@ -16,7 +16,7 @@
  * ============================================================================
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-reader',
+  id: '@zengleiyixiao/dsh-reader',
   factory: function (require) {
     var React = require('react')
     var h = React.createElement

@@ -1,6 +1,6 @@
 {
   "name": "@zengleiyixiao/dsh-reader",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DSH 阅读器插件：JSON / Markdown / SQL 格式化与高亮，正文可直接编辑，外加文本对比（行级 + 词级，并排 / 统一视图）与查找替换",
   "keywords": [
     "dsh",
