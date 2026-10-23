@@ -1,0 +1,20 @@
+README.md
+  h_162e444daf7c78 27,32-35
+client.js
+  h_162e444daf7c78 19
+cordis.patch.yml
+  h_162e444daf7c78 10
+package.json
+  h_162e444daf7c78 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "54030c175b06a4f38aabcc7b6e1c08a190bf1665",
+  "prompts": {},
+  "humans": {
+    "h_162e444daf7c78": {
+      "author": "zengleiyixiao1 <zengleiyixiao1@jd.com>"
+    }
+  }
+}
