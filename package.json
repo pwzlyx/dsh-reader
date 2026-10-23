@@ -1,0 +1,61 @@
+{
+  "name": "dsh-reader",
+  "version": "0.3.0",
+  "description": "DSH 阅读器插件：JSON / Markdown / SQL 格式化与高亮，正文可直接编辑，外加文本对比（行级 + 词级，并排 / 统一视图）与查找替换",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "reader",
+    "json",
+    "markdown",
+    "sql",
+    "diff",
+    "formatter"
+  ],
+  "license": "MIT",
+  "author": "zengleiyixiao1 <zengleiyixiao1@jd.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pwzlyx/dsh-reader.git"
+  },
+  "homepage": "https://github.com/pwzlyx/dsh-reader#readme",
+  "bugs": {
+    "url": "https://github.com/pwzlyx/dsh-reader/issues"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test test/core.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}
