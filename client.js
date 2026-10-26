@@ -658,6 +658,7 @@ window.__ModuleLoader__.load({
       }
       return out
     }
+
     /* --------------------------------------------------------------------
      *  Markdown（够用的小解析器：标题 / 段落 / 代码 / 引用 / 列表 / 表格 / 分割线）
      * ------------------------------------------------------------------ */
@@ -1918,6 +1919,69 @@ window.__ModuleLoader__.load({
       buf += s.slice(pos)
       return { ok: true, text: buf, count: n }
     }
+    /** 把一段文本按命中区间切出来，命中处包 <mark>（rd-hit / rd-hit-on） */
+    function markText(text, ranges) {
+      var s = String(text == null ? '' : text)
+      if (!ranges || !ranges.length) return s
+      var out = []
+      var pos = 0
+      for (var i = 0; i < ranges.length; i++) {
+        var r = ranges[i]
+        var st = clamp(r.s, 0, s.length)
+        var en = clamp(r.e, st, s.length)
+        if (st > pos) out.push(s.slice(pos, st))
+        if (en > st) out.push(h('mark', { key: 'mk' + i, className: r.active ? 'rd-hit rd-hit-on' : 'rd-hit' }, s.slice(st, en)))
+        pos = en
+      }
+      if (pos < s.length) out.push(s.slice(pos))
+      return out
+    }
+
+    /** 某个字符下标在第几行（从 1 开始） */
+    function lineNoAt(text, offset) {
+      var s = String(text == null ? '' : text)
+      var at = clamp(offset, 0, s.length)
+      var n = 1
+      for (var i = 0; i < at; i++) if (s.charCodeAt(i) === 10) n += 1
+      return n
+    }
+
+    /** 阅读 / 对比共用的查找栏 */
+    function FindBar(props) {
+      var total = props.total || 0
+      var active = typeof props.active === 'number' ? props.active : -1
+      var counter = props.error
+        ? '正则有误'
+        : (total ? (active + 1) + ' / ' + total + (props.where ? ' · ' + props.where : '') : (props.q ? '没有匹配' : ''))
+      return h('div', { 'data-rd-find': '' },
+        h('input', {
+          'data-rd-find-q': '', placeholder: '查找…', value: props.q, autoFocus: true,
+          onChange: function (e) { props.onQ(e.target.value); if (props.onClearMsg) props.onClearMsg() },
+          onKeyDown: function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); props.onJump(e.shiftKey ? -1 : 1) }
+            else if (e.key === 'Escape') { e.preventDefault(); props.onClose() }
+          },
+        }),
+        h('span', { 'data-rd-meta': '' }, counter),
+        h('button', { 'data-rd-btn': '', disabled: !total, onClick: function () { props.onJump(-1) } }, '上一个'),
+        h('button', { 'data-rd-btn': '', disabled: !total, onClick: function () { props.onJump(1) } }, '下一个'),
+        h(Check, { label: '区分大小写', checked: props.cs, onChange: props.onCs }),
+        h(Check, { label: '正则', checked: props.rx, onChange: props.onRx }),
+        props.showReplace ? h('input', {
+          'data-rd-find-r': '', placeholder: '替换为…', value: props.repl,
+          onChange: function (e) { props.onRepl(e.target.value) },
+          onKeyDown: function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); props.onReplace() }
+            else if (e.key === 'Escape') { e.preventDefault(); props.onClose() }
+          },
+        }) : null,
+        props.showReplace ? h('button', { 'data-rd-btn': '', disabled: !total, onClick: props.onReplace }, '替换') : null,
+        props.showReplace ? h('button', { 'data-rd-btn': '', disabled: !total, onClick: props.onReplaceAll }, '全部替换') : null,
+        props.msg ? h('span', { 'data-rd-meta': '' }, props.msg) : null,
+        h('button', { 'data-rd-btn': '', onClick: props.onClose, style: { marginLeft: 'auto' } }, '关闭'))
+    }
+
+
     /* ── 阅读面板 ───────────────────────────────────────────────────── */
 
     var KIND_OPTIONS = [
@@ -2080,32 +2144,15 @@ window.__ModuleLoader__.load({
         })
       }
 
-      var findBar = props.findOpen ? h('div', { 'data-rd-find': '' },
-        h('input', {
-          'data-rd-find-q': '', placeholder: '查找…', value: q, autoFocus: true,
-          onChange: function (e) { setQ(e.target.value); setMsg('') },
-          onKeyDown: function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); jump(e.shiftKey ? -1 : 1) }
-            else if (e.key === 'Escape') { e.preventDefault(); props.onFindClose() }
-          },
-        }),
-        h('span', { 'data-rd-meta': '' }, found.error ? '正则有误' : (total ? (active + 1) + ' / ' + total : (q ? '没有匹配' : ''))),
-        h('button', { 'data-rd-btn': '', disabled: !total, onClick: function () { jump(-1) } }, '上一个'),
-        h('button', { 'data-rd-btn': '', disabled: !total, onClick: function () { jump(1) } }, '下一个'),
-        h(Check, { label: '区分大小写', checked: cs, onChange: setCs }),
-        h(Check, { label: '正则', checked: rx, onChange: setRx }),
-        h('input', {
-          'data-rd-find-r': '', placeholder: '替换为…', value: repl,
-          onChange: function (e) { setRepl(e.target.value) },
-          onKeyDown: function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); doReplaceOne() }
-            else if (e.key === 'Escape') { e.preventDefault(); props.onFindClose() }
-          },
-        }),
-        h('button', { 'data-rd-btn': '', disabled: !total, onClick: doReplaceOne }, '替换'),
-        h('button', { 'data-rd-btn': '', disabled: !total, onClick: doReplaceAll }, '全部替换'),
-        msg ? h('span', { 'data-rd-meta': '' }, msg) : null,
-        h('button', { 'data-rd-btn': '', onClick: props.onFindClose, style: { marginLeft: 'auto' } }, '关闭')) : null
+      var findBar = props.findOpen ? h(FindBar, {
+        q: q, onQ: setQ, cs: cs, onCs: setCs, rx: rx, onRx: setRx,
+        repl: repl, onRepl: setRepl, showReplace: true,
+        total: total, active: active,
+        where: active >= 0 && ranges[active] ? '第 ' + lineNoAt(display, ranges[active].s) + ' 行' : '',
+        error: found.error, msg: msg, onClearMsg: function () { setMsg('') },
+        onJump: jump, onClose: props.onFindClose,
+        onReplace: doReplaceOne, onReplaceAll: doReplaceAll,
+      }) : null
 
       var dirtyBar = edited ? h('div', { 'data-rd-dirty': '' },
         h('span', null, '内容改过了，还没写回文件'),
@@ -2167,6 +2214,12 @@ window.__ModuleLoader__.load({
       '[data-rd-dl]:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.06));}',
       '[data-rd-dl][data-op=ins]:hover{background:rgba(76,175,80,.20);}',
       '[data-rd-dl][data-op=del]:hover{background:rgba(239,68,68,.19);}',
+      '[data-rd-editpair]{flex:1;min-height:0;display:flex;}',
+      '[data-rd-pane]{flex:1 1 50%;min-width:0;display:flex;flex-direction:column;border-right:.5px solid var(--dsw-alias-border-l3,rgba(128,128,128,.18));}',
+      '[data-rd-pane]:last-child{border-right:0;}',
+      '[data-rd-pane-hd]{display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#8b8f94);border-bottom:.5px solid var(--dsw-alias-border-l3,rgba(128,128,128,.14));flex:none;white-space:nowrap;overflow:hidden;}',
+      '[data-rd-pane-hd] b{font-weight:600;color:var(--dsw-alias-label-secondary,#6b7075);}',
+      '[data-rd-pane-hd] span{overflow:hidden;text-overflow:ellipsis;}',
     ].join('\n')
 
     function diffCellText(segs) {
@@ -2177,9 +2230,10 @@ window.__ModuleLoader__.load({
       })
     }
 
-    function diffLine(op) {
+    function diffLine(op, ranges) {
       var sign = op.op === 'ins' ? '+' : op.op === 'del' ? '-' : ' '
       var no = op.op === 'ins' ? op.bNo : op.aNo
+      var content = (ranges && ranges.length) ? markText(op.text, ranges) : (op.segs ? diffCellText(op.segs) : op.text)
       return h('div', {
         'data-rd-dl': '', key: op.key,
         'data-op': op.op === 'eq' || op.op === 'gap' ? undefined : op.op,
@@ -2187,17 +2241,67 @@ window.__ModuleLoader__.load({
       },
         h('span', { 'data-rd-sign': '' }, sign),
         h('span', { 'data-rd-dl-no': '' }, no === null || no === undefined ? '' : String(no)),
-        h('span', { 'data-rd-dl-tx': '' }, op.segs ? diffCellText(op.segs) : op.text))
+        h('span', { 'data-rd-dl-tx': '' }, content))
     }
 
-    function unifiedHunkOps(ops, hunkIndex, onExpand, gapCount) {
+    /** 只滚内部的正文容器，别把整页（连同工具栏）一起滚走 */
+    function scrollHitIntoView(el) {
+      if (!el) return
+      var box = el.closest('[data-rd-edsurf]') || el.closest('[data-rd-scroll]') || el.closest('[data-rd-pane-body]')
+      if (!box) return
+      var er = el.getBoundingClientRect()
+      var br = box.getBoundingClientRect()
+      if (er.top < br.top || er.bottom > br.bottom) {
+        box.scrollTop += (er.top - br.top) - box.clientHeight / 2 + er.height / 2
+      }
+    }
+
+    /** 同一行上左右两侧的命中合并（eq 行两边文字一样，避免重复画 mark） */
+    function mergeRanges(a, b) {
+      var out = []
+      var seen = {}
+      var put = function (arr) {
+        if (!arr) return
+        for (var i = 0; i < arr.length; i += 1) {
+          var r = arr[i]
+          var k = r.s + ':' + r.e
+          if (!seen[k]) { seen[k] = { s: r.s, e: r.e, active: !!r.active }; out.push(seen[k]) }
+          else if (r.active) seen[k].active = true
+        }
+      }
+      put(a)
+      put(b)
+      out.sort(function (x, y) { return x.s - y.s })
+      return out.length ? out : null
+    }
+
+    /** 把「当前高亮的那一处」标到每行的命中里 */
+    function annotateHits(map, activeHit, side) {
+      var out = {}
+      var keys = Object.keys(map)
+      for (var i = 0; i < keys.length; i += 1) {
+        var arr = map[keys[i]]
+        var copy = []
+        for (var j = 0; j < arr.length; j += 1) {
+          var r = arr[j]
+          var on = !!(activeHit && activeHit.side === side && activeHit.line === Number(keys[i]) + 1 &&
+            activeHit.s === r.s && activeHit.e === r.e)
+          copy.push({ s: r.s, e: r.e, active: on })
+        }
+        out[keys[i]] = copy
+      }
+      return out
+    }
+
+    function unifiedHunkOps(ops, hunkIndex, onExpand, leftMap, rightMap) {
       var out = []
       var i = 0
       var seq = 0
       while (i < ops.length) {
         var op = ops[i]
         if (op.op === 'eq') {
-          out.push(diffLine({ op: 'eq', text: op.text, aNo: op.aNo, bNo: op.bNo, key: 'u' + hunkIndex + '-' + (seq++) }))
+          var eqRanges = mergeRanges(leftMap && leftMap[op.aNo - 1], rightMap && rightMap[op.bNo - 1])
+          out.push(diffLine({ op: 'eq', text: op.text, aNo: op.aNo, bNo: op.bNo, key: 'u' + hunkIndex + '-' + (seq++) }, eqRanges))
           i += 1
           continue
         }
@@ -2218,8 +2322,8 @@ window.__ModuleLoader__.load({
           var d = dels[k]
           var s = inss[k]
           var segs = d && s ? diffWords(d.text, s.text) : null
-          if (d) out.push(diffLine({ op: 'del', text: d.text, aNo: d.aNo, key: 'u' + hunkIndex + '-' + (seq++), segs: segs ? segs.a : null }))
-          if (s) out.push(diffLine({ op: 'ins', text: s.text, bNo: s.bNo, key: 'u' + hunkIndex + '-' + (seq++), segs: segs ? segs.b : null }))
+          if (d) out.push(diffLine({ op: 'del', text: d.text, aNo: d.aNo, key: 'u' + hunkIndex + '-' + (seq++), segs: segs ? segs.a : null }, leftMap && leftMap[d.aNo - 1]))
+          if (s) out.push(diffLine({ op: 'ins', text: s.text, bNo: s.bNo, key: 'u' + hunkIndex + '-' + (seq++), segs: segs ? segs.b : null }, rightMap && rightMap[s.bNo - 1]))
         }
       }
       return out
@@ -2286,19 +2390,45 @@ window.__ModuleLoader__.load({
       return rows
     }
 
-    function sideHalf(row, side) {
+    function sideHalf(row, side, ranges) {
       var text = side === 'a' ? row.a : row.b
       var no = side === 'a' ? row.aNo : row.bNo
       var has = text !== null && text !== undefined
       var segs = row.segs ? (side === 'a' ? row.segs.a : row.segs.b) : null
       var opKind = has ? (row.kind === 'change' ? (side === 'a' ? 'del' : 'ins') : row.kind === 'eq' ? 'eq' : (side === 'a' ? 'del' : 'ins')) : null
+      var content = ''
+      if (has) content = (ranges && ranges.length) ? markText(text, ranges) : (segs ? diffCellText(segs) : text)
       return h('div', {
         'data-rd-dl': '', 'data-op': opKind && opKind !== 'eq' ? opKind : undefined,
         'data-none': has ? undefined : '',
       },
         h('span', { 'data-rd-sign': '' }, has ? (opKind === 'del' ? '-' : opKind === 'ins' ? '+' : ' ') : ''),
         h('span', { 'data-rd-dl-no': '' }, no === null || no === undefined ? '' : String(no)),
-        h('span', { 'data-rd-dl-tx': '' }, has ? (segs ? diffCellText(segs) : text) : ''))
+        h('span', { 'data-rd-dl-tx': '' }, content))
+    }
+
+    /** 左右并排的两个可直接编辑的输入区 */
+    function EditPair(props) {
+      var makePane = function (side, text, hits, activeLine, title, placeholder) {
+        var st = side === 'left' ? props.left : props.right
+        var label = side === 'left' ? '左' : '右'
+        return h('div', { 'data-rd-pane': '', key: side },
+          h('div', { 'data-rd-pane-hd': '' },
+            h('b', null, label),
+            h('span', { title: st.path || '' }, st.path ? st.path : (text ? '粘贴的文本' : '未选')),
+            h('button', { 'data-rd-btn': '', onClick: function () { props.onPick(side) } }, '打开'),
+            h('button', { 'data-rd-btn': '', onClick: function () { props.onPaste(side) } }, '粘贴')),
+          h('div', { 'data-rd-pane-body': '' },
+            h(EditableCode, {
+              text: text, kind: 'text', lineNumbers: true, wrap: false,
+              hits: props.findOpen ? hits : null, activeLine: activeLine,
+              placeholder: placeholder,
+              onChange: function (value) { props.onEdit(side, value) },
+            })))
+      }
+      return h('div', { 'data-rd-editpair': '' },
+        makePane('left', props.leftText, props.leftHits, props.leftActiveLine, '左边', '把左边的文本粘进来（⌘V）…'),
+        makePane('right', props.rightText, props.rightHits, props.rightActiveLine, '右边', '把右边的文本粘进来（⌘V）…'))
     }
 
     function DiffPanel(props) {
@@ -2306,13 +2436,26 @@ window.__ModuleLoader__.load({
       var right = props.right
       var dopt = props.dopt
       var setDopt = props.setDopt
+      var leftText = left.raw || ''
+      var rightText = right.raw || ''
+      var [q, setQ] = useState('')
+      var [cs, setCs] = useState(false)
+      var [rx, setRx] = useState(false)
+      var [idx, setIdx] = useState(0)
+      var [msg, setMsg] = useState('')
+
+      var bothFilled = !!leftText && !!rightText
+      var editing = dopt.editing === true || !bothFilled
+
+      var leftFound = useMemo(function () { return findRanges(leftText, q, cs, rx, 4000) }, [leftText, q, cs, rx])
+      var rightFound = useMemo(function () { return findRanges(rightText, q, cs, rx, 4000) }, [rightText, q, cs, rx])
+      var rawLeftHits = useMemo(function () { return hitsByLine(leftText, leftFound.ranges, -1) }, [leftText, leftFound.ranges])
+      var rawRightHits = useMemo(function () { return hitsByLine(rightText, rightFound.ranges, -1) }, [rightText, rightFound.ranges])
 
       var combined = useMemo(function () {
-        var aText = left.raw || ''
-        var bText = right.raw || ''
-        if (!aText && !bText) return null
-        var aLines = aText === '' ? [] : splitLines(aText)
-        var bLines = bText === '' ? [] : splitLines(bText)
+        if (!leftText && !rightText) return null
+        var aLines = leftText === '' ? [] : splitLines(leftText)
+        var bLines = rightText === '' ? [] : splitLines(rightText)
         var norm = dopt.ignoreWs
           ? function (line) { return line.replace(/\s+/g, ' ').trim() }
           : function (line) { return line }
@@ -2326,47 +2469,131 @@ window.__ModuleLoader__.load({
           return { op: 'ins', text: s }
         })
         return { ops: aligned, stats: diffStats(aligned), aCount: aLines.length, bCount: bLines.length }
-      }, [left.raw, right.raw, dopt.ignoreWs])
+      }, [leftText, rightText, dopt.ignoreWs])
 
       var hunks = useMemo(function () {
         if (!combined) return []
         return buildHunks(combined.ops, dopt.context)
       }, [combined, dopt.context])
 
+      var sideRows = useMemo(function () {
+        return combined && dopt.view === 'side' && !editing ? sideRowsFromHunks(hunks, combined.aCount) : null
+      }, [combined, dopt.view, editing, hunks])
+
+      /** 只在「看得见的行」里计命中：折叠掉的行不参与计数 / 跳转，计数和画面才对得上 */
+      var hitList = useMemo(function () {
+        var list = []
+        if (!q) return list
+        var push = function (side, line, arr) {
+          if (!arr || !line) return
+          for (var i = 0; i < arr.length; i += 1) list.push({ side: side, line: line, s: arr[i].s, e: arr[i].e })
+        }
+        var linesOf = function (map) { return Object.keys(map).map(Number).sort(function (a, b) { return a - b }) }
+        if (editing) {
+          linesOf(rawLeftHits).forEach(function (ln) { push('left', ln + 1, rawLeftHits[ln]) })
+          linesOf(rawRightHits).forEach(function (ln) { push('right', ln + 1, rawRightHits[ln]) })
+          return list
+        }
+        if (dopt.view === 'side' && sideRows) {
+          sideRows.forEach(function (row) {
+            if (row.kind === 'gap' || row.kind === 'ellipsis') return
+            push('left', row.aNo, rawLeftHits[row.aNo - 1])
+            push('right', row.bNo, rawRightHits[row.bNo - 1])
+          })
+          return list
+        }
+        if (combined) {
+          hunks.forEach(function (hk) {
+            hk.ops.forEach(function (op) {
+              if (op.op === 'eq') {
+                var arr = rawLeftHits[(op.aNo || 0) - 1] || rawRightHits[(op.bNo || 0) - 1] || null
+                push('left', op.aNo || op.bNo, arr)
+              } else if (op.op === 'del') {
+                push('left', op.aNo, rawLeftHits[op.aNo - 1])
+              } else if (op.op === 'ins') {
+                push('right', op.bNo, rawRightHits[op.bNo - 1])
+              }
+            })
+          })
+        }
+        return list
+      }, [q, editing, dopt.view, sideRows, hunks, combined, rawLeftHits, rawRightHits])
+
+      var total = hitList.length
+      var active = total ? Math.min(idx, total - 1) : -1
+      var activeHit = active >= 0 ? hitList[active] : null
+      var activeKey = activeHit ? activeHit.side + ':' + activeHit.line + ':' + activeHit.s + ':' + activeHit.e : ''
+      var leftHits = useMemo(function () { return annotateHits(rawLeftHits, activeHit, 'left') }, [rawLeftHits, activeKey])
+      var rightHits = useMemo(function () { return annotateHits(rawRightHits, activeHit, 'right') }, [rawRightHits, activeKey])
+      var leftActiveLine = activeHit && activeHit.side === 'left' ? activeHit.line : 0
+      var rightActiveLine = activeHit && activeHit.side === 'right' ? activeHit.line : 0
+
+      useEffect(function () { setIdx(0) }, [q, cs, rx, leftText, rightText])
+
+      var jump = function (delta) {
+        if (!total) return
+        setIdx(function (prev) {
+          var cur = Math.min(prev, total - 1)
+          if (cur < 0) cur = 0
+          return (cur + delta + total) % total
+        })
+      }
+
+      useEffect(function () {
+        if (!props.findOpen || active < 0 || editing) return
+        var el = document.querySelector('[data-rd-root] mark.rd-hit-on')
+        scrollHitIntoView(el)
+      }, [active, editing, props.findOpen])
+
+      useEffect(function () {
+        if (!props.findOpen) return undefined
+        var onKey = function (e) {
+          var nextKey = e.key === 'F3' || ((e.metaKey || e.ctrlKey) && (e.key === 'g' || e.key === 'G'))
+          if (!nextKey) return
+          e.preventDefault()
+          jump(e.shiftKey ? -1 : 1)
+        }
+        window.addEventListener('keydown', onKey)
+        return function () { window.removeEventListener('keydown', onKey) }
+      }, [props.findOpen, total])
+
       var expand = function () {
         setDopt(function (p) { return Object.assign({}, p, { context: clamp((p.context || 3) + 6, 3, 40) }) })
       }
 
+      var sideName = function (side) {
+        var st = side === 'left' ? left : right
+        return st.path ? basename(st.path) : (st.raw ? '粘贴的文本' : '未选')
+      }
+
       var sourceBar = h('div', { 'data-rd-bar': '' },
         h('span', { 'data-rd-meta': '' }, '左边'),
-        h('span', { 'data-rd-meta': '', title: left.path || '', style: { maxWidth: '180px' } }, left.path ? basename(left.path) : (left.raw ? '粘贴的文本' : '未选')),
+        h('span', { 'data-rd-meta': '', title: left.path || '', style: { maxWidth: '150px' } }, sideName('left')),
         h('button', { 'data-rd-btn': '', onClick: function () { props.onPick('left') } }, '打开'),
         h('button', { 'data-rd-btn': '', onClick: function () { props.onPaste('left') } }, '粘贴'),
         h('span', { 'data-rd-meta': '' }, '⇄'),
         h('span', { 'data-rd-meta': '' }, '右边'),
-        h('span', { 'data-rd-meta': '', title: right.path || '', style: { maxWidth: '180px' } }, right.path ? basename(right.path) : (right.raw ? '粘贴的文本' : '未选')),
+        h('span', { 'data-rd-meta': '', title: right.path || '', style: { maxWidth: '150px' } }, sideName('right')),
         h('button', { 'data-rd-btn': '', onClick: function () { props.onPick('right') } }, '打开'),
         h('button', { 'data-rd-btn': '', onClick: function () { props.onPaste('right') } }, '粘贴'),
         h('span', { 'data-rd-grow': '' }),
-        h('button', {
-          'data-rd-btn': '', title: '左右互换',
-          onClick: function () { props.onSwap() },
-        }, '互换'),
-        h('button', {
-          'data-rd-btn': '',
-          onClick: function () { props.onClear() },
-        }, '清空'))
+        h('button', { 'data-rd-btn': '', 'data-on-find': props.findOpen ? '' : undefined, onClick: props.onFindOpen }, '查找'),
+        h('button', { 'data-rd-btn': '', title: '左右互换', onClick: function () { props.onSwap() } }, '互换'),
+        h('button', { 'data-rd-btn': '', onClick: function () { props.onClear() } }, '清空'))
 
       var optionBar = h('div', { 'data-rd-bar': '' },
-        h('select', {
+        editing
+          ? h('button', { 'data-rd-btn': '', 'data-primary': bothFilled ? '' : undefined, disabled: !bothFilled, onClick: function () { setDopt(function (p) { return Object.assign({}, p, { editing: false }) }) } }, '看差异')
+          : h('button', { 'data-rd-btn': '', onClick: function () { setDopt(function (p) { return Object.assign({}, p, { editing: true }) }) } }, '并排编辑'),
+        editing ? null : h('select', {
           'data-rd-sel': '', value: dopt.view,
           onChange: function (e) { setDopt(function (p) { return Object.assign({}, p, { view: e.target.value }) }) },
         },
           h('option', { value: 'unified' }, '上下对照'),
           h('option', { value: 'side' }, '左右并排')),
-        h(Check, { label: '忽略空白差异', checked: dopt.ignoreWs, onChange: function (v) { setDopt(function (p) { return Object.assign({}, p, { ignoreWs: v }) }) } }),
-        h('span', { 'data-rd-meta': '' }, '上下文'),
-        h('select', {
+        editing ? null : h(Check, { label: '忽略空白差异', checked: dopt.ignoreWs, onChange: function (v) { setDopt(function (p) { return Object.assign({}, p, { ignoreWs: v }) }) } }),
+        editing ? null : h('span', { 'data-rd-meta': '' }, '上下文'),
+        editing ? null : h('select', {
           'data-rd-sel': '', value: String(dopt.context),
           onChange: function (e) { setDopt(function (p) { return Object.assign({}, p, { context: Number(e.target.value) }) }) },
         }, [1, 3, 6, 10].map(function (n) { return h('option', { key: n, value: String(n) }, String(n) + ' 行') })),
@@ -2374,22 +2601,36 @@ window.__ModuleLoader__.load({
           h('span', { className: 'rd-add' }, '＋' + combined.stats.added),
           ' ',
           h('span', { className: 'rd-del' }, '－' + combined.stats.removed)) : null,
-        combined ? h('span', { 'data-rd-meta': '' }, combined.aCount + ' 行 ↔ ' + combined.bCount + ' 行') : null)
+        combined ? h('span', { 'data-rd-meta': '' }, combined.aCount + ' 行 ↔ ' + combined.bCount + ' 行') : null,
+        editing && !bothFilled ? h('span', { 'data-rd-meta': '' }, '两边都有内容后自动显示差异') : null)
+
+      var findBar = props.findOpen ? h(FindBar, {
+        q: q, onQ: setQ, cs: cs, onCs: setCs, rx: rx, onRx: setRx,
+        showReplace: false,
+        total: total, active: active,
+        where: !activeHit ? '' : (dopt.view === 'side' || editing ? (activeHit.side === 'left' ? '左 · ' : '右 · ') : '') + '第 ' + activeHit.line + ' 行',
+        error: leftFound.error || rightFound.error, msg: msg, onClearMsg: function () { setMsg('') },
+        onJump: jump, onClose: props.onFindClose,
+      }) : null
 
       var body
-      if (!combined) {
-        body = h('div', { 'data-rd-empty': '' },
-          h('h3', null, '两边各选一段文本，就能看出差在哪'),
-          h('div', null, '可以从文件里读，也可以直接粘贴。行级差异 + 词级高亮。'),
-          h('div', { style: { display: 'flex', gap: '8px', marginTop: '6px' } },
-            h('button', { 'data-rd-btn': '', 'data-primary': '', onClick: function () { props.onPick('left') } }, '选左边'),
-            h('button', { 'data-rd-btn': '', onClick: function () { props.onPick('right') } }, '选右边')))
+      if (editing) {
+        body = h(EditPair, {
+          left: left, right: right, leftText: leftText, rightText: rightText,
+          leftHits: leftHits, rightHits: rightHits,
+          leftActiveLine: leftActiveLine, rightActiveLine: rightActiveLine,
+          findOpen: props.findOpen,
+          onPick: props.onPick, onPaste: props.onPaste, onEdit: props.onEditSide,
+        })
+      } else if (!combined) {
+        body = h('div', { 'data-rd-empty': '' }, h('h3', null, '两边各放一段文本，就能看出差在哪'))
       } else if (hunks.length === 0) {
         body = h('div', { 'data-rd-empty': '' },
           h('h3', null, '两段文本完全一致'),
           h('div', null, '（' + combined.aCount + ' 行，没有发现差异）'))
       } else if (dopt.view === 'side') {
         var rows = sideRowsFromHunks(hunks, combined.aCount)
+        var showHits = props.findOpen
         body = h('div', { 'data-rd-scroll': '' },
           h('div', { 'data-rd-shead': '' },
             h('div', null, '左：' + (left.path ? left.path : '粘贴文本')),
@@ -2403,16 +2644,21 @@ window.__ModuleLoader__.load({
               return h('button', { key: row.key, 'data-rd-gapbtn': '', onClick: expand },
                 '⋯ ' + pos + '还有 ' + row.count + ' 行相同的内容（点一下多展开些）')
             }
+            var aRanges = showHits && row.aNo ? leftHits[row.aNo - 1] : null
+            var bRanges = showHits && row.bNo ? rightHits[row.bNo - 1] : null
+            if (!aRanges && !bRanges && row.kind === 'eq') {
+              aRanges = showHits ? (leftHits[(row.aNo || 0) - 1] || null) : null
+            }
             return h('div', { 'data-rd-srow': '', key: row.key },
-              sideHalf(row, 'a'),
-              sideHalf(row, 'b'))
+              sideHalf(row, 'a', aRanges),
+              sideHalf(row, 'b', bRanges))
           }))
       } else {
-        /* 相邻两段差异之间被折叠掉的那些相同行，得让人看得见、点得开 */
         var gapBtn = function (label, key) {
           return h('button', { key: key, 'data-rd-gapbtn': '', onClick: expand }, label)
         }
         var pieces = []
+        var showHitsU = props.findOpen
         for (var hx = 0; hx < hunks.length; hx += 1) {
           var hk = hunks[hx]
           var skip = hunkSkip(hunks, hx)
@@ -2421,14 +2667,14 @@ window.__ModuleLoader__.load({
           var addedN = hk.ops.filter(function (op) { return op.op === 'ins' }).length
           pieces.push(h('div', { 'data-rd-hunk': '', key: 'h' + hx },
             h('div', { 'data-rd-hunk-hd': '' }, '@@ 左 ' + hk.aStart + ' 行 / 右 ' + hk.bStart + ' 行　-' + removedN + ' +' + addedN + ' @@'),
-            unifiedHunkOps(hk.ops, hx, expand)))
+            unifiedHunkOps(hk.ops, hx, expand, showHitsU ? leftHits : null, showHitsU ? rightHits : null)))
         }
         var tailSkip = combined.aCount - hunkAEnd(hunks[hunks.length - 1])
         if (tailSkip > 0) pieces.push(gapBtn('⋯ 下面还有 ' + tailSkip + ' 行相同内容（点一下多展开些）', 'tail'))
         body = h('div', { 'data-rd-scroll': '' }, pieces)
       }
 
-      return h('div', { 'data-rd-body': '' }, sourceBar, optionBar, body)
+      return h('div', { 'data-rd-body': '' }, sourceBar, optionBar, findBar, body)
     }
 
     /* ── 根组件 ─────────────────────────────────────────────────────── */
@@ -2436,7 +2682,7 @@ window.__ModuleLoader__.load({
     var EMPTY_READ = { path: '', name: '', size: 0, raw: '', kind: 'auto', err: null, bin: false, trunc: false, edit: null }
     var EMPTY_SIDE = { path: '', raw: '' }
     var DEFAULT_OPTS = { indent: 2, sortKeys: false, minify: false, sqlOn: true, mdPreview: true, wrap: false, lineNumbers: true }
-    var DEFAULT_DOPT = { view: 'unified', ignoreWs: false, context: 3 }
+    var DEFAULT_DOPT = { view: 'unified', ignoreWs: false, context: 3, editing: false }
 
     /* 页签切走会卸载整个视图，状态放模块作用域里按 sessionId 存一份，切回来接着用 */
     var SAVED_BY_SESSION = {}
@@ -2478,7 +2724,7 @@ window.__ModuleLoader__.load({
         var onKey = function (e) {
           var mod = e.metaKey || e.ctrlKey
           if (mod && !e.altKey && (e.key === 'f' || e.key === 'F')) {
-            if (mode === 'read') { setFindOpen(true); e.preventDefault() }
+            setFindOpen(true); e.preventDefault()
             return
           }
           if (e.key === 'Escape') {
@@ -2600,6 +2846,13 @@ window.__ModuleLoader__.load({
           },
           onSwap: swap,
           onClear: function () { setLeft(EMPTY_SIDE); setRight(EMPTY_SIDE) },
+          onEditSide: function (side, value) {
+            if (side === 'left') setLeft(function (prev) { return { path: prev.path, raw: value } })
+            else setRight(function (prev) { return { path: prev.path, raw: value } })
+          },
+          findOpen: findOpen,
+          onFindOpen: function () { setFindOpen(true) },
+          onFindClose: function () { setFindOpen(false) },
         })
       }
 
